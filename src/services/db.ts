@@ -668,6 +668,73 @@ export const dbService = {
     return code;
   },
 
+  ensureKnockoutFixturesExist: async (): Promise<void> => {
+    const { data: sf1 } = await supabase.from('fixtures').select('id').eq('id', 'ko-sf-1').maybeSingle();
+    const { data: sf2 } = await supabase.from('fixtures').select('id').eq('id', 'ko-sf-2').maybeSingle();
+    const { data: final } = await supabase.from('fixtures').select('id').eq('id', 'ko-final').maybeSingle();
+
+    const missingFixtures = [];
+
+    if (!sf1) {
+      missingFixtures.push({
+        id: 'ko-sf-1',
+        team_a_id: 'tbd-a',
+        team_a_name: 'Winner Group A',
+        team_b_id: 'tbd-b',
+        team_b_name: 'Runner-up Group B',
+        date_time: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+        group_id: 'group-a',
+        status: 'scheduled',
+        score_a: null,
+        score_b: null,
+        scorers: [],
+        clean_sheets: [],
+        stage: 'semifinal'
+      });
+    }
+
+    if (!sf2) {
+      missingFixtures.push({
+        id: 'ko-sf-2',
+        team_a_id: 'tbd-a',
+        team_a_name: 'Winner Group B',
+        team_b_id: 'tbd-b',
+        team_b_name: 'Runner-up Group A',
+        date_time: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+        group_id: 'group-b',
+        status: 'scheduled',
+        score_a: null,
+        score_b: null,
+        scorers: [],
+        clean_sheets: [],
+        stage: 'semifinal'
+      });
+    }
+
+    if (!final) {
+      missingFixtures.push({
+        id: 'ko-final',
+        team_a_id: 'tbd-a',
+        team_a_name: 'Winner Semi-Final 1',
+        team_b_id: 'tbd-b',
+        team_b_name: 'Winner Semi-Final 2',
+        date_time: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString(),
+        group_id: 'group-a',
+        status: 'scheduled',
+        score_a: null,
+        score_b: null,
+        scorers: [],
+        clean_sheets: [],
+        stage: 'final'
+      });
+    }
+
+    if (missingFixtures.length > 0) {
+      const { error } = await supabase.from('fixtures').insert(missingFixtures);
+      if (error) console.error('Error ensuring knockout fixtures:', error);
+    }
+  },
+
   // Database Seeding Logic for empty instances
   seedDatabase: async (): Promise<void> => {
     try {

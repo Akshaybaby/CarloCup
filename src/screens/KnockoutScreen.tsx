@@ -51,13 +51,20 @@ export const KnockoutScreen: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [fixturesList, teamsList] = await Promise.all([
+      let [fixturesList, teamsList] = await Promise.all([
         dbService.getFixtures(),
         dbService.getTeams()
       ]);
 
-      const sf = fixturesList.filter(f => f.stage === 'semifinal');
-      const f = fixturesList.filter(f => f.stage === 'final');
+      let sf = fixturesList.filter(f => f.stage === 'semifinal');
+      let f = fixturesList.filter(f => f.stage === 'final');
+
+      if (sf.length === 0 || f.length === 0) {
+        await dbService.ensureKnockoutFixturesExist();
+        fixturesList = await dbService.getFixtures();
+        sf = fixturesList.filter(f => f.stage === 'semifinal');
+        f = fixturesList.filter(f => f.stage === 'final');
+      }
 
       setSemifinals(sf);
       setFinals(f);
@@ -186,8 +193,12 @@ export const KnockoutScreen: React.FC = () => {
   }
 
   const renderBracketCard = (item: Fixture) => {
+    const hasPlayed = item.status === 'played';
+    const isWinnerA = hasPlayed && (item.scoreA ?? 0) >= (item.scoreB ?? 0);
+    const isWinnerB = hasPlayed && (item.scoreB ?? 0) >= (item.scoreA ?? 0);
+
     return (
-      <Card key={item.id} style={styles.matchCard} accent={item.status === 'played'}>
+      <Card key={item.id} style={styles.matchCard} accent={hasPlayed}>
         <View style={styles.cardHeader}>
           <Text style={styles.stageLabel}>
             {item.stage === 'semifinal' ? 'Semi-Final' : '🏆 Grand Final'}
@@ -195,37 +206,65 @@ export const KnockoutScreen: React.FC = () => {
           <Text style={styles.dateText}>{formatDate(item.dateTime)}</Text>
         </View>
 
-        <View style={styles.scoreboardRow}>
-          {/* Team A */}
-          <View style={styles.teamCol}>
-            <Text style={styles.teamEmoji}>{getTeamLogo(item.teamAId)}</Text>
-            <Text style={styles.teamName} numberOfLines={1}>{item.teamAName}</Text>
+        <View style={styles.bracketRowsContainer}>
+          {/* Row for Team A */}
+          <View style={[styles.bracketTeamRow, isWinnerA && styles.winnerRow]}>
+            <View style={styles.bracketTeamLeft}>
+              <Text style={styles.bracketTeamEmoji}>{getTeamLogo(item.teamAId)}</Text>
+              <Text 
+                style={[
+                  styles.bracketTeamName, 
+                  isWinnerA && styles.winnerTeamText,
+                  hasPlayed && !isWinnerA && styles.loserTeamText
+                ]} 
+                numberOfLines={1}
+              >
+                {item.teamAName}
+              </Text>
+            </View>
+            <Text 
+              style={[
+                styles.bracketTeamScore, 
+                isWinnerA && styles.winnerScoreText,
+                hasPlayed && !isWinnerA && styles.loserScoreText
+              ]}
+            >
+              {hasPlayed ? item.scoreA : '-'}
+            </Text>
           </View>
 
-          {/* Scores */}
-          <View style={styles.scoreCol}>
-            {item.status === 'played' ? (
-              <View style={styles.scoreBadge}>
-                <Text style={styles.scoreNum}>{item.scoreA}</Text>
-                <Text style={styles.scoreDash}>-</Text>
-                <Text style={styles.scoreNum}>{item.scoreB}</Text>
-              </View>
-            ) : (
-              <View style={styles.vsBadge}>
-                <Text style={styles.vsText}>VS</Text>
-              </View>
-            )}
-          </View>
+          {/* Divider line between teams */}
+          <View style={styles.bracketDivider} />
 
-          {/* Team B */}
-          <View style={styles.teamCol}>
-            <Text style={styles.teamEmoji}>{getTeamLogo(item.teamBId)}</Text>
-            <Text style={styles.teamName} numberOfLines={1}>{item.teamBName}</Text>
+          {/* Row for Team B */}
+          <View style={[styles.bracketTeamRow, isWinnerB && styles.winnerRow]}>
+            <View style={styles.bracketTeamLeft}>
+              <Text style={styles.bracketTeamEmoji}>{getTeamLogo(item.teamBId)}</Text>
+              <Text 
+                style={[
+                  styles.bracketTeamName, 
+                  isWinnerB && styles.winnerTeamText,
+                  hasPlayed && !isWinnerB && styles.loserTeamText
+                ]} 
+                numberOfLines={1}
+              >
+                {item.teamBName}
+              </Text>
+            </View>
+            <Text 
+              style={[
+                styles.bracketTeamScore, 
+                isWinnerB && styles.winnerScoreText,
+                hasPlayed && !isWinnerB && styles.loserScoreText
+              ]}
+            >
+              {hasPlayed ? item.scoreB : '-'}
+            </Text>
           </View>
         </View>
 
         {/* Goal Scorers */}
-        {item.status === 'played' && item.scorers && item.scorers.length > 0 && (
+        {hasPlayed && item.scorers && item.scorers.length > 0 && (
           <View style={styles.scorersSection}>
             <Award color={COLORS.primaryLight} size={14} style={{ marginRight: 6 }} />
             <Text style={styles.scorersText}>
@@ -246,12 +285,12 @@ export const KnockoutScreen: React.FC = () => {
             </TouchableOpacity>
 
             <Button
-              title={item.status === 'played' ? 'Edit Score' : 'Log Score'}
-              variant={item.status === 'played' ? 'outline' : 'primary'}
+              title={hasPlayed ? 'Edit Score' : 'Log Score'}
+              variant={hasPlayed ? 'outline' : 'primary'}
               size="sm"
               style={styles.scoreBtn}
               onPress={() => navigation.navigate('ResultsEntry', { fixtureId: item.id })}
-              icon={<ClipboardCheck color={item.status === 'played' ? COLORS.primary : COLORS.background} size={14} />}
+              icon={<ClipboardCheck color={hasPlayed ? COLORS.primary : COLORS.background} size={14} />}
             />
           </View>
         )}
@@ -456,59 +495,62 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     fontSize: 11,
   },
-  scoreboardRow: {
+  bracketRowsContainer: {
+    backgroundColor: COLORS.surfaceLight,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    overflow: 'hidden',
+  },
+  bracketTeamRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: SPACING.xs,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.md,
   },
-  teamCol: {
-    flex: 1,
-    alignItems: 'center',
-    maxWidth: '40%',
-  },
-  teamEmoji: {
-    fontSize: 32,
-    marginBottom: 6,
-  },
-  teamName: {
-    color: COLORS.text,
-    fontSize: 13,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  scoreCol: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scoreBadge: {
+  bracketTeamLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
+    marginRight: SPACING.md,
   },
-  scoreNum: {
+  bracketTeamEmoji: {
+    fontSize: 22,
+    marginRight: SPACING.sm,
+  },
+  bracketTeamName: {
     color: COLORS.text,
-    fontSize: 24,
+    fontSize: 14,
+    fontWeight: '600',
+    flex: 1,
+  },
+  bracketTeamScore: {
+    color: COLORS.text,
+    fontSize: 16,
     fontWeight: '800',
-    marginHorizontal: 8,
+    minWidth: 24,
+    textAlign: 'center',
   },
-  scoreDash: {
-    color: COLORS.primary,
-    fontSize: 18,
-    fontWeight: 'bold',
+  bracketDivider: {
+    height: 1,
+    backgroundColor: COLORS.border,
   },
-  vsBadge: {
-    backgroundColor: COLORS.surfaceLight,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+  winnerRow: {
+    backgroundColor: '#0F2C20', // subtle green for winner highlight
   },
-  vsText: {
+  winnerTeamText: {
+    color: COLORS.primaryLight,
+    fontWeight: '700',
+  },
+  loserTeamText: {
     color: COLORS.textMuted,
-    fontSize: 11,
-    fontWeight: 'bold',
+  },
+  winnerScoreText: {
+    color: COLORS.primaryLight,
+  },
+  loserScoreText: {
+    color: COLORS.textMuted,
   },
   scorersSection: {
     flexDirection: 'row',

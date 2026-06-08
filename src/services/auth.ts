@@ -34,7 +34,7 @@ supabase.auth.getSession().then(({ data: { session } }) => {
             uid: session.user.id,
             email: session.user.email || '',
             name: data.name,
-            role: data.role as UserRole,
+            role: (data.role ? data.role.toLowerCase() : 'viewer') as UserRole,
             teamId: data.team_id,
           };
           notifyListeners();
@@ -63,7 +63,7 @@ export const authService = {
               uid: session.user.id,
               email: session.user.email || '',
               name: data.name,
-              role: data.role as UserRole,
+              role: (data.role ? data.role.toLowerCase() : 'viewer') as UserRole,
               teamId: data.team_id,
             };
           } else {
@@ -113,7 +113,7 @@ export const authService = {
         uid: data.user.id,
         email: data.user.email || '',
         name: profile.name,
-        role: profile.role as UserRole,
+        role: (profile.role ? profile.role.toLowerCase() : 'viewer') as UserRole,
         teamId: profile.team_id,
       };
       notifyListeners();
