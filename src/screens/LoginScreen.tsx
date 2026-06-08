@@ -7,8 +7,7 @@ import {
   KeyboardAvoidingView, 
   Platform,
   Alert,
-  TouchableOpacity,
-  Image
+  TouchableOpacity
 } from 'react-native';
 import { Mail, Lock, User, KeyRound, Eye, EyeOff } from 'lucide-react-native';
 
@@ -78,11 +77,9 @@ export const LoginScreen: React.FC = () => {
     >
       <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
         <View style={styles.headerSection}>
-          <Image 
-            source={require('../../assets/smiling-jesus.png')}
-            style={styles.logoImage}
-            resizeMode="contain"
-          />
+          <View style={styles.logoPlaceholder}>
+            <Text style={styles.logoPlaceholderText}>🏆</Text>
+          </View>
           <Text style={styles.appName}>Carlo Cup</Text>
           <Text style={styles.appSubtitle}>Football Tournament Manager</Text>
         </View>
@@ -221,13 +218,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: SPACING.xl,
   },
-  logoImage: {
+  logoPlaceholder: {
     width: 90,
     height: 90,
     borderRadius: 45,
     borderWidth: 2.5,
     borderColor: COLORS.primary,
+    backgroundColor: COLORS.surfaceLight,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: SPACING.sm,
+  },
+  logoPlaceholderText: {
+    fontSize: 36,
   },
   appName: {
     color: COLORS.text,
