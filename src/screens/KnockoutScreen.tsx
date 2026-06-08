@@ -19,15 +19,14 @@ import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { BibleVerse } from '../components/BibleVerse';
 import { dbService, Fixture, Team } from '../services/db';
-import { authService } from '../services/auth';
+import { authService, UserProfile } from '../services/auth';
 
 export const KnockoutScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const isFocused = useIsFocused();
-  const user = authService.getCurrentUser();
-  const isAdmin = user?.role === 'admin';
 
   // State
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [semifinals, setSemifinals] = useState<Fixture[]>([]);
   const [finals, setFinals] = useState<Fixture[]>([]);
@@ -40,6 +39,14 @@ export const KnockoutScreen: React.FC = () => {
   const [teamBId, setTeamBId] = useState('');
   const [dateTime, setDateTime] = useState('');
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (isFocused) {
+      setCurrentUser(authService.getCurrentUser());
+    }
+  }, [isFocused]);
+
+  const isAdmin = currentUser?.role === 'admin';
 
   const loadData = async () => {
     try {
@@ -107,11 +114,25 @@ export const KnockoutScreen: React.FC = () => {
       const teamA = teams.find(t => t.id === teamAId);
       const teamB = teams.find(t => t.id === teamBId);
 
+      let defaultTeamAName = 'TBD';
+      let defaultTeamBName = 'TBD';
+
+      if (selectedFixture.id === 'ko-final') {
+        defaultTeamAName = 'Winner Semi-Final 1';
+        defaultTeamBName = 'Winner Semi-Final 2';
+      } else if (selectedFixture.id === 'ko-sf-1') {
+        defaultTeamAName = 'Winner Group A';
+        defaultTeamBName = 'Runner-up Group B';
+      } else if (selectedFixture.id === 'ko-sf-2') {
+        defaultTeamAName = 'Winner Group B';
+        defaultTeamBName = 'Runner-up Group A';
+      }
+
       const updates = {
         teamAId,
-        teamAName: teamA ? teamA.name : (teamAId === 'tbd-a' ? 'Winner Semi-Final 1' : 'TBD'),
+        teamAName: teamA ? teamA.name : (teamAId === 'tbd-a' ? defaultTeamAName : 'TBD'),
         teamBId,
-        teamBName: teamB ? teamB.name : (teamBId === 'tbd-b' ? 'Winner Semi-Final 2' : 'TBD'),
+        teamBName: teamB ? teamB.name : (teamBId === 'tbd-b' ? defaultTeamBName : 'TBD'),
         dateTime: parsedDate.toISOString(),
         groupId: selectedFixture.groupId // retain existing group mapping
       };
@@ -148,6 +169,21 @@ export const KnockoutScreen: React.FC = () => {
     if (teamId.startsWith('tbd')) return '❓';
     return teamLogoMap[teamId] || '🛡️';
   };
+
+  let teamATbdLabel = 'TBD A';
+  let teamBTbdLabel = 'TBD B';
+  if (selectedFixture) {
+    if (selectedFixture.id === 'ko-final') {
+      teamATbdLabel = 'Winner SF1';
+      teamBTbdLabel = 'Winner SF2';
+    } else if (selectedFixture.id === 'ko-sf-1') {
+      teamATbdLabel = 'Winner Group A';
+      teamBTbdLabel = 'Runner-up Group B';
+    } else if (selectedFixture.id === 'ko-sf-2') {
+      teamATbdLabel = 'Winner Group B';
+      teamBTbdLabel = 'Runner-up Group A';
+    }
+  }
 
   const renderBracketCard = (item: Fixture) => {
     return (
@@ -293,7 +329,7 @@ export const KnockoutScreen: React.FC = () => {
                     ]}
                     onPress={() => setTeamAId('tbd-a')}
                   >
-                    <Text style={[styles.pickerBadgeText, teamAId === 'tbd-a' && styles.pickerBadgeTextActive]}>Winner SF1</Text>
+                    <Text style={[styles.pickerBadgeText, teamAId === 'tbd-a' && styles.pickerBadgeTextActive]}>{teamATbdLabel}</Text>
                   </TouchableOpacity>
                   
                   {teams.map((t) => (
@@ -324,7 +360,7 @@ export const KnockoutScreen: React.FC = () => {
                     ]}
                     onPress={() => setTeamBId('tbd-b')}
                   >
-                    <Text style={[styles.pickerBadgeText, teamBId === 'tbd-b' && styles.pickerBadgeTextActive]}>Winner SF2</Text>
+                    <Text style={[styles.pickerBadgeText, teamBId === 'tbd-b' && styles.pickerBadgeTextActive]}>{teamBTbdLabel}</Text>
                   </TouchableOpacity>
 
                   {teams.map((t) => (

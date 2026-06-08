@@ -44,7 +44,6 @@ export const TeamsScreen: React.FC = () => {
   const [showPlayerModal, setShowPlayerModal] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
   const [playerName, setPlayerName] = useState('');
-  const [playerJersey, setPlayerJersey] = useState('');
   const [playerPosition, setPlayerPosition] = useState<'Goalkeeper' | 'Defender' | 'Midfielder' | 'Forward'>('Midfielder');
   const [playerDob, setPlayerDob] = useState('');
   const [savingPlayer, setSavingPlayer] = useState(false);
@@ -148,18 +147,13 @@ export const TeamsScreen: React.FC = () => {
       Alert.alert('Error', 'Player name is required.');
       return;
     }
-    const jerseyNum = parseInt(playerJersey);
-    if (isNaN(jerseyNum)) {
-      Alert.alert('Error', 'Valid jersey number is required.');
-      return;
-    }
     if (!selectedTeam) return;
 
     try {
       setSavingPlayer(true);
       const playerData = {
         name: playerName.trim(),
-        jerseyNumber: jerseyNum,
+        jerseyNumber: 0,
         position: playerPosition,
         dateOfBirth: playerDob || '1999-01-01',
         teamId: selectedTeam.id,
@@ -176,7 +170,6 @@ export const TeamsScreen: React.FC = () => {
       setShowPlayerModal(false);
       setEditingPlayer(null);
       setPlayerName('');
-      setPlayerJersey('');
       setPlayerDob('');
       // Reload roster
       const players = await dbService.getPlayers(selectedTeam.id);
@@ -191,7 +184,6 @@ export const TeamsScreen: React.FC = () => {
   const handleEditPlayerPress = (player: Player) => {
     setEditingPlayer(player);
     setPlayerName(player.name);
-    setPlayerJersey(player.jerseyNumber.toString());
     setPlayerPosition(player.position);
     setPlayerDob(player.dateOfBirth);
     setShowPlayerModal(true);
@@ -274,7 +266,6 @@ export const TeamsScreen: React.FC = () => {
                 onPress={() => {
                   setEditingPlayer(null);
                   setPlayerName('');
-                  setPlayerJersey('');
                   setPlayerPosition('Midfielder');
                   setPlayerDob('1998-01-01');
                   setShowPlayerModal(true);
@@ -301,9 +292,6 @@ export const TeamsScreen: React.FC = () => {
               ListFooterComponent={<BibleVerse />}
               renderItem={({ item }) => (
                 <Card style={styles.playerCard}>
-                  <View style={styles.playerNumBg}>
-                    <Text style={styles.playerNumText}>#{item.jerseyNumber}</Text>
-                  </View>
                   <View style={styles.playerMainInfo}>
                     <Text style={styles.playerName}>{item.name}</Text>
                     <View style={styles.playerMetaRow}>
@@ -485,13 +473,7 @@ export const TeamsScreen: React.FC = () => {
                 icon={<User color={COLORS.textMuted} size={18} />}
               />
 
-              <Input
-                label="Jersey Number"
-                placeholder="e.g. 10"
-                value={playerJersey}
-                onChangeText={setPlayerJersey}
-                keyboardType="number-pad"
-              />
+
 
               <View style={styles.formSelectGroup}>
                 <Text style={styles.selectLabel}>Playing Position</Text>

@@ -12,7 +12,7 @@ import {
   ScrollView
 } from 'react-native';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
-import { Lock, Unlock, Settings, Trophy, ShieldAlert, Check } from 'lucide-react-native';
+import { Lock, Unlock, Settings, Trophy, ShieldAlert, Check, User, Mail, RefreshCw } from 'lucide-react-native';
 
 import { COLORS, SPACING } from '../config/theme';
 import { Header } from '../components/Header';
@@ -20,6 +20,7 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { dbService, Team, Tournament } from '../services/db';
+import { authService } from '../services/auth';
 
 export const AdminControlsScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -35,6 +36,12 @@ export const AdminControlsScreen: React.FC = () => {
   // Form
   const [tournamentName, setTournamentName] = useState('');
   const [tournamentLogo, setTournamentLogo] = useState('');
+
+  // Form Admin creation
+  const [newAdminName, setNewAdminName] = useState('');
+  const [newAdminEmail, setNewAdminEmail] = useState('');
+  const [newAdminPassword, setNewAdminPassword] = useState('');
+  const [creatingAdmin, setCreatingAdmin] = useState(false);
 
   const loadData = async () => {
     try {
@@ -133,6 +140,56 @@ export const AdminControlsScreen: React.FC = () => {
     }
   };
 
+  const handleCreateAdmin = async () => {
+    if (!newAdminName.trim() || !newAdminEmail.trim() || !newAdminPassword.trim()) {
+      Alert.alert('Error', 'Please fill in all admin fields.');
+      return;
+    }
+    if (newAdminPassword.length < 6) {
+      Alert.alert('Error', 'Password must be at least 6 characters.');
+      return;
+    }
+
+    try {
+      setCreatingAdmin(true);
+      await authService.createAdminUser(
+        newAdminEmail.trim(),
+        newAdminPassword.trim(),
+        newAdminName.trim()
+      );
+      Alert.alert('Success', `Admin account created for ${newAdminName.trim()}!`);
+      setNewAdminName('');
+      setNewAdminEmail('');
+      setNewAdminPassword('');
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to create admin.');
+    } finally {
+      setCreatingAdmin(false);
+    }
+  };
+
+  const handleRegenerateCode = async (team: Team) => {
+    Alert.alert(
+      'Regenerate Code',
+      `Are you sure you want to generate a new captain code for ${team.name}? The current code (${team.captainCode}) will be invalidated.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Regenerate',
+          onPress: async () => {
+            try {
+              const newCode = await dbService.regenerateCaptainCode(team.id);
+              Alert.alert('Success', `New Captain Code for ${team.name} is: ${newCode}`);
+              loadData();
+            } catch (err) {
+              Alert.alert('Error', 'Failed to regenerate captain code.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -171,6 +228,40 @@ export const AdminControlsScreen: React.FC = () => {
           />
         </Card>
 
+        {/* Create New Admin */}
+        <Card style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>👑 Add New Admin</Text>
+          <Input
+            label="Admin Full Name"
+            placeholder="e.g. Samuel Admin"
+            value={newAdminName}
+            onChangeText={setNewAdminName}
+            icon={<User color={COLORS.textMuted} size={18} />}
+          />
+          <Input
+            label="Admin Email"
+            placeholder="e.g. samuel@carlo.com"
+            value={newAdminEmail}
+            onChangeText={setNewAdminEmail}
+            icon={<Mail color={COLORS.textMuted} size={18} />}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+          <Input
+            label="Password"
+            placeholder="Min 6 characters"
+            value={newAdminPassword}
+            onChangeText={setNewAdminPassword}
+            icon={<Lock color={COLORS.textMuted} size={18} />}
+            secureTextEntry
+          />
+          <Button
+            title="Create Admin Account"
+            loading={creatingAdmin}
+            onPress={handleCreateAdmin}
+          />
+        </Card>
+
         {/* Global lock triggers */}
         <Card style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>🔒 Roster Lock Actions</Text>
@@ -198,7 +289,13 @@ export const AdminControlsScreen: React.FC = () => {
               <View style={styles.teamInfoCol}>
                 <Text style={styles.teamName}>{team.name}</Text>
                 <Text style={styles.teamCodeText}>
-                  Captain Code: <Text style={styles.codeText}>{team.captainCode}</Text>
+                  Captain Code: <Text style={styles.codeText}>{team.captainCode}</Text>{'  '}
+                  <TouchableOpacity 
+                    onPress={() => handleRegenerateCode(team)}
+                    style={styles.regenerateCodeLink}
+                  >
+                    <RefreshCw color={COLORS.primaryLight} size={12} style={{ marginTop: 2 }} />
+                  </TouchableOpacity>
                 </Text>
                 <Text style={styles.teamCaptainName}>
                   Captain: {team.captainName || 'Not Registered'}
@@ -333,5 +430,10 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textAlign: 'center',
     marginVertical: SPACING.md,
+  },
+  regenerateCodeLink: {
+    paddingHorizontal: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

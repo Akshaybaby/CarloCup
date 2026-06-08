@@ -287,7 +287,7 @@ export const ResultsScreen: React.FC = () => {
                       ]}
                       onPress={() => setSelectedPlayerId(p.id)}
                     >
-                      <Text style={styles.badgeText}>{p.name} (#{p.jerseyNumber})</Text>
+                      <Text style={styles.badgeText}>{p.name}</Text>
                     </TouchableOpacity>
                   );
                 })}

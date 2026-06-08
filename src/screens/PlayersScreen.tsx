@@ -42,7 +42,6 @@ export const PlayersScreen: React.FC = () => {
 
   // Form Mode state
   const [playerName, setPlayerName] = useState('');
-  const [playerJersey, setPlayerJersey] = useState('');
   const [playerPosition, setPlayerPosition] = useState<'Goalkeeper' | 'Defender' | 'Midfielder' | 'Forward'>('Midfielder');
   const [playerDob, setPlayerDob] = useState('');
   const [saving, setSaving] = useState(false);
@@ -78,7 +77,6 @@ export const PlayersScreen: React.FC = () => {
         const player = pList.find(p => p.id === editPlayerId);
         if (player) {
           setPlayerName(player.name);
-          setPlayerJersey(player.jerseyNumber.toString());
           setPlayerPosition(player.position);
           setPlayerDob(player.dateOfBirth);
         }
@@ -125,17 +123,12 @@ export const PlayersScreen: React.FC = () => {
       Alert.alert('Error', 'Player name is required.');
       return;
     }
-    const jerseyNum = parseInt(playerJersey);
-    if (isNaN(jerseyNum)) {
-      Alert.alert('Error', 'Valid jersey number is required.');
-      return;
-    }
 
     try {
       setSaving(true);
       const playerData = {
         name: playerName.trim(),
-        jerseyNumber: jerseyNum,
+        jerseyNumber: 0,
         position: playerPosition,
         dateOfBirth: playerDob || '1999-01-01',
         teamId: editTeamId,
@@ -185,13 +178,7 @@ export const PlayersScreen: React.FC = () => {
               icon={<User color={COLORS.textMuted} size={18} />}
             />
 
-            <Input
-              label="Jersey Number"
-              placeholder="e.g. 7"
-              value={playerJersey}
-              onChangeText={setPlayerJersey}
-              keyboardType="number-pad"
-            />
+
 
             <View style={styles.formSelectGroup}>
               <Text style={styles.selectLabel}>Position</Text>
@@ -329,9 +316,6 @@ export const PlayersScreen: React.FC = () => {
             contentContainerStyle={styles.listContent}
             renderItem={({ item }) => (
               <Card style={styles.playerRegistryCard}>
-                <View style={styles.registryNumBg}>
-                  <Text style={styles.registryNumText}>#{item.jerseyNumber}</Text>
-                </View>
                 <View style={styles.playerInfo}>
                   <Text style={styles.playerName}>{item.name}</Text>
                   <View style={styles.playerSubRow}>

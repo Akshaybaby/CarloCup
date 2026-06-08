@@ -25,15 +25,15 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { dbService, Tournament } from '../services/db';
-import { authService } from '../services/auth';
+import { authService, UserProfile } from '../services/auth';
 import { BibleVerse } from '../components/BibleVerse';
 
 export const DashboardScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const isFocused = useIsFocused();
-  const user = authService.getCurrentUser();
-  const isAdmin = user?.role === 'admin';
 
+  // State
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [tournament, setTournament] = useState<Tournament | null>(null);
   
@@ -48,6 +48,14 @@ export const DashboardScreen: React.FC = () => {
   const [editName, setEditName] = useState('');
   const [editLogo, setEditLogo] = useState('');
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (isFocused) {
+      setCurrentUser(authService.getCurrentUser());
+    }
+  }, [isFocused]);
+
+  const isAdmin = currentUser?.role === 'admin';
 
   const loadData = async () => {
     try {
@@ -202,7 +210,7 @@ export const DashboardScreen: React.FC = () => {
         <Card style={styles.welcomeCard}>
           <View style={styles.welcomeRow}>
             <Sparkles color={COLORS.primary} size={20} style={{ marginRight: SPACING.sm }} />
-            <Text style={styles.welcomeTitle}>Church Tournament Organizer</Text>
+            <Text style={styles.welcomeTitle}>{tournament?.name || 'Carlo Cup'} Organizer</Text>
           </View>
           <Text style={styles.welcomeText}>
             Welcome to the {tournament?.name} official app! Keep track of all scores, schedules, groups, and player stats in real time. 
@@ -210,7 +218,7 @@ export const DashboardScreen: React.FC = () => {
           <Text style={styles.welcomeRoleTip}>
             {isAdmin 
               ? '👑 You are logged in as Admin. You have full edit rights across groups, teams, fixtures, and scores.' 
-              : user?.role === 'captain' 
+              : currentUser?.role === 'captain' 
                 ? '⚽ You are logged in as Team Captain. You can add or edit players specifically for your team.' 
                 : '👀 You are viewing in Public mode. Select standings or statistics to view real-time data.'}
           </Text>

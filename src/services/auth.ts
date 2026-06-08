@@ -305,5 +305,46 @@ export const authService = {
       isAnonymous: true,
     };
     notifyListeners();
+  },
+
+  createAdminUser: async (email: string, password: string, name: string): Promise<void> => {
+    if (isFirebaseConfigured && db && auth) {
+      const { initializeApp } = require('firebase/app');
+      const { getAuth, createUserWithEmailAndPassword } = require('firebase/auth');
+      const { firebaseConfig } = require('../config/firebase');
+      
+      // Initialize a secondary app so we don't log out the current admin
+      const secondaryApp = initializeApp(firebaseConfig, 'SecondaryAuthApp');
+      const secondaryAuth = getAuth(secondaryApp);
+      
+      try {
+        const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+        await setDoc(doc(db, 'users', cred.user.uid), {
+          name,
+          email,
+          role: 'admin',
+          teamId: null,
+          createdAt: new Date(),
+        });
+      } finally {
+        await secondaryAuth.app.delete();
+      }
+    } else {
+      // Mock Mode: Write to AsyncStorage
+      const usersStr = await AsyncStorage.getItem(LOCAL_USERS_DB_KEY);
+      const users: UserProfile[] = usersStr ? JSON.parse(usersStr) : DEFAULT_MOCK_USERS;
+      if (users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
+        throw new Error('Email is already registered.');
+      }
+      const newUser: UserProfile = {
+        uid: `admin-mock-${Date.now()}`,
+        email,
+        name,
+        role: 'admin',
+        teamId: null,
+      };
+      users.push(newUser);
+      await AsyncStorage.setItem(LOCAL_USERS_DB_KEY, JSON.stringify(users));
+    }
   }
 };

@@ -592,7 +592,14 @@ export const dbService = {
         } as Fixture;
       }).sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
     } else {
-      const list = await getLocalData<Fixture>(FIXTURES_KEY);
+      let list = await getLocalData<Fixture>(FIXTURES_KEY);
+      // Ensure knockout fixtures are seeded if missing from AsyncStorage
+      const hasKnockouts = list.some(f => f.stage === 'semifinal' || f.stage === 'final');
+      if (!hasKnockouts && list.length > 0) {
+        const knockoutFixtures = DEFAULT_FIXTURES.filter(f => f.stage === 'semifinal' || f.stage === 'final');
+        list = [...list, ...knockoutFixtures];
+        await saveLocalData(FIXTURES_KEY, list);
+      }
       return list.sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
     }
   },
@@ -647,6 +654,7 @@ export const dbService = {
     cleanSheets: string[]
   ): Promise<void> => {
     if (isFirebaseConfigured && db) {
+      // Save current match results
       await updateDoc(doc(db, 'fixtures', id), {
         scoreA,
         scoreB,
@@ -654,6 +662,28 @@ export const dbService = {
         cleanSheets,
         status: 'played',
       });
+
+      // Auto-propagate winners for Semi-Finals to Grand Final
+      if (id === 'ko-sf-1' || id === 'ko-sf-2') {
+        const sfSnap = await getDoc(doc(db, 'fixtures', id));
+        if (sfSnap.exists()) {
+          const sfData = sfSnap.data();
+          const winnerId = scoreA >= scoreB ? sfData.teamAId : sfData.teamBId;
+          const winnerName = scoreA >= scoreB ? sfData.teamAName : sfData.teamBName;
+          
+          if (id === 'ko-sf-1') {
+            await updateDoc(doc(db, 'fixtures', 'ko-final'), {
+              teamAId: winnerId,
+              teamAName: winnerName
+            });
+          } else {
+            await updateDoc(doc(db, 'fixtures', 'ko-final'), {
+              teamBId: winnerId,
+              teamBName: winnerName
+            });
+          }
+        }
+      }
     } else {
       const list = await getLocalData<Fixture>(FIXTURES_KEY);
       const idx = list.findIndex(f => f.id === id);
@@ -666,6 +696,25 @@ export const dbService = {
           cleanSheets, 
           status: 'played' 
         };
+
+        // Auto-propagate winners for Semi-Finals to Grand Final in mock DB
+        if (id === 'ko-sf-1' || id === 'ko-sf-2') {
+          const sfFix = list[idx];
+          const winnerId = scoreA >= scoreB ? sfFix.teamAId : sfFix.teamBId;
+          const winnerName = scoreA >= scoreB ? sfFix.teamAName : sfFix.teamBName;
+          
+          const finalIdx = list.findIndex(f => f.id === 'ko-final');
+          if (finalIdx !== -1) {
+            if (id === 'ko-sf-1') {
+              list[finalIdx].teamAId = winnerId;
+              list[finalIdx].teamAName = winnerName;
+            } else {
+              list[finalIdx].teamBId = winnerId;
+              list[finalIdx].teamBName = winnerName;
+            }
+          }
+        }
+
         await saveLocalData(FIXTURES_KEY, list);
       }
     }
@@ -859,6 +908,28 @@ export const dbService = {
         list[idx].team_locked = locked;
         await saveLocalData(TEAMS_KEY, list);
       }
+    }
+  },
+
+  regenerateCaptainCode: async (teamId: string): Promise<string> => {
+    if (isFirebaseConfigured && db) {
+      const snap = await getDocs(collection(db, 'teams'));
+      const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team));
+      const team = list.find(t => t.id === teamId);
+      if (!team) throw new Error('Team not found');
+      
+      const code = generateCaptainCode(team.name, list.filter(t => t.id !== teamId));
+      await updateDoc(doc(db, 'teams', teamId), { captainCode: code });
+      return code;
+    } else {
+      const list = await getLocalData<Team>(TEAMS_KEY);
+      const team = list.find(t => t.id === teamId);
+      if (!team) throw new Error('Team not found');
+      
+      const code = generateCaptainCode(team.name, list.filter(t => t.id !== teamId));
+      team.captainCode = code;
+      await saveLocalData(TEAMS_KEY, list);
+      return code;
     }
   }
 };
