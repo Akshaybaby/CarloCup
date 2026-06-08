@@ -1,12 +1,4 @@
-import { 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  signOut as firebaseSignOut, 
-  onAuthStateChanged as firebaseOnAuthStateChanged,
-  User as FirebaseUser
-} from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { auth, db, isFirebaseConfigured } from '../config/firebase';
+import { supabase } from '../config/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type UserRole = 'admin' | 'captain' | 'viewer';
@@ -21,7 +13,6 @@ export interface UserProfile {
 }
 
 const LOCAL_USER_KEY = '@carlo_cup_local_user';
-const LOCAL_USERS_DB_KEY = '@carlo_cup_local_users_db';
 
 // Roles registration access codes
 export const CODES = {
@@ -29,60 +20,32 @@ export const CODES = {
   CAPTAIN: 'CARLO_CAPTAIN_2026',
 };
 
-// Simulated mock database of users when Firebase is not connected
-const DEFAULT_MOCK_USERS: UserProfile[] = [
-  {
-    uid: 'admin-mock',
-    email: 'admin@carlo.com',
-    name: 'Tournament Admin',
-    role: 'admin',
-    teamId: null,
-  },
-  {
-    uid: 'captain-mock-1',
-    email: 'captain1@carlo.com',
-    name: 'John Captain',
-    role: 'captain',
-    teamId: 'team-1',
-  },
-  {
-    uid: 'captain-mock-2',
-    email: 'captain2@carlo.com',
-    name: 'David Captain',
-    role: 'captain',
-    teamId: 'team-2',
-  }
-];
-
 let authStateListeners: ((user: UserProfile | null) => void)[] = [];
 let currentUser: UserProfile | null = null;
 
-// Initialize local user database
-const initLocalUsers = async () => {
-  try {
-    const stored = await AsyncStorage.getItem(LOCAL_USERS_DB_KEY);
-    if (!stored) {
-      await AsyncStorage.setItem(LOCAL_USERS_DB_KEY, JSON.stringify(DEFAULT_MOCK_USERS));
-    }
-  } catch (e) {
-    console.error('Failed to init local users', e);
-  }
-};
-
-if (!isFirebaseConfigured) {
-  initLocalUsers();
-  // Check if there's a saved session in local storage
-  AsyncStorage.getItem(LOCAL_USER_KEY).then((data) => {
-    if (data) {
-      currentUser = JSON.parse(data);
-      notifyListeners();
-    }
-  });
-}
-
+// Notify listeners of user state changes
 function notifyListeners() {
   authStateListeners.forEach(cb => cb(currentUser));
 }
+
+// Initial session check
+supabase.auth.getSession().then(({ data: { session } }) => {
+  if (session?.user) {
+    supabase.from('profiles').select('*').eq('id', session.user.id).single()
+      .then(({ data, error }) => {
+        if (!error && data) {
+          currentUser = {
+            uid: session.user.id,
+            email: session.user.email || '',
+            name: data.name,
+            role: data.role as UserRole,
+            teamId: data.team_id,
+          };
+          notifyListeners();
+        }
+      });
+  }
+});
 
 export const authService = {
   getCurrentUser: (): UserProfile | null => {
@@ -95,103 +58,72 @@ export const authService = {
     // Call initial
     callback(currentUser);
 
-    if (isFirebaseConfigured && auth) {
-      const unsub = firebaseOnAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
-        if (firebaseUser) {
-          try {
-            // Get user role profile from Firestore
-            const docRef = doc(db, 'users', firebaseUser.uid);
-            const docSnap = await getDoc(docRef);
-            if (docSnap.exists()) {
-              const data = docSnap.data();
-              currentUser = {
-                uid: firebaseUser.uid,
-                email: firebaseUser.email || '',
-                name: data.name || 'User',
-                role: data.role || 'viewer',
-                teamId: data.teamId || null,
-              };
-            } else {
-              // Create a default viewer profile if it doesn't exist
-              const profile: UserProfile = {
-                uid: firebaseUser.uid,
-                email: firebaseUser.email || '',
-                name: 'Anonymous Player',
-                role: 'viewer',
-                teamId: null,
-              };
-              await setDoc(docRef, {
-                name: profile.name,
-                email: profile.email,
-                role: profile.role,
-                teamId: profile.teamId,
-                createdAt: new Date(),
-              });
-              currentUser = profile;
-            }
-            notifyListeners();
-          } catch (error) {
-            console.error('Error fetching user profile:', error);
-            currentUser = null;
-            notifyListeners();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event: any, session: any) => {
+      if (session?.user) {
+        try {
+          const { data, error } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+          if (!error && data) {
+            currentUser = {
+              uid: session.user.id,
+              email: session.user.email || '',
+              name: data.name,
+              role: data.role as UserRole,
+              teamId: data.team_id,
+            };
+          } else {
+            currentUser = {
+              uid: session.user.id,
+              email: session.user.email || '',
+              name: session.user.user_metadata?.name || 'User',
+              role: 'viewer',
+              teamId: null,
+            };
           }
-        } else {
-          // If Firestore is set up but no authenticated Firebase user (excluding viewer bypass)
-          if (!currentUser?.isAnonymous) {
-            currentUser = null;
-            notifyListeners();
-          }
+          notifyListeners();
+        } catch (error) {
+          currentUser = null;
+          notifyListeners();
         }
-      });
-
-      return () => {
-        unsub();
-        authStateListeners = authStateListeners.filter(cb => cb !== callback);
-      };
-    }
+      } else {
+        if (!currentUser?.isAnonymous) {
+          currentUser = null;
+          notifyListeners();
+        }
+      }
+    });
 
     return () => {
+      subscription.unsubscribe();
       authStateListeners = authStateListeners.filter(cb => cb !== callback);
     };
   },
 
   login: async (email: string, password: string): Promise<UserProfile> => {
-    if (isFirebaseConfigured && auth) {
-      const cred = await signInWithEmailAndPassword(auth, email, password);
-      // Fetch profile from firestore
-      const docSnap = await getDoc(doc(db, 'users', cred.user.uid));
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        currentUser = {
-          uid: cred.user.uid,
-          email: cred.user.email || '',
-          name: data.name,
-          role: data.role,
-          teamId: data.teamId || null,
-        };
-      } else {
-        throw new Error('User profile record not found in Firestore.');
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+
+    if (data.user) {
+      const { data: profile, error: profileErr } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', data.user.id)
+        .single();
+
+      if (profileErr || !profile) {
+        throw new Error('User profile record not found in Supabase. Please sign up or contact admin.');
       }
+
+      currentUser = {
+        uid: data.user.id,
+        email: data.user.email || '',
+        name: profile.name,
+        role: profile.role as UserRole,
+        teamId: profile.team_id,
+      };
       notifyListeners();
       return currentUser;
-    } else {
-      // Mock Authentication
-      const usersStr = await AsyncStorage.getItem(LOCAL_USERS_DB_KEY);
-      const users: UserProfile[] = usersStr ? JSON.parse(usersStr) : DEFAULT_MOCK_USERS;
-      const found = users.find(u => u.email.toLowerCase() === email.toLowerCase() && password === 'password'); // all mock use password: 'password'
-      
-      // Let's also support any password for ease of test
-      const foundAnyPw = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-      
-      if (foundAnyPw) {
-        currentUser = foundAnyPw;
-        await AsyncStorage.setItem(LOCAL_USER_KEY, JSON.stringify(currentUser));
-        notifyListeners();
-        return currentUser;
-      } else {
-        throw new Error('Invalid email or password. Hint: In mock mode, use admin@carlo.com, captain1@carlo.com, or captain2@carlo.com with any password.');
-      }
     }
+    throw new Error('Auth session could not be established.');
   },
 
   signup: async (
@@ -225,71 +157,49 @@ export const authService = {
       assignedTeamId = matchedTeam.id;
     }
 
-    if (isFirebaseConfigured && auth) {
-      const cred = await createUserWithEmailAndPassword(auth, email, password);
-      const profile: UserProfile = {
-        uid: cred.user.uid,
-        email: cred.user.email || '',
+    const { data, error } = await supabase.auth.signUp({ 
+      email, 
+      password,
+      options: {
+        data: { name }
+      }
+    });
+    if (error) throw error;
+
+    if (data.user) {
+      // Create profile record in Supabase profiles table
+      const { error: profileErr } = await supabase.from('profiles').insert([
+        {
+          id: data.user.id,
+          email,
+          name,
+          role,
+          team_id: assignedTeamId,
+        }
+      ]);
+      if (profileErr) throw profileErr;
+
+      // Update the team document with the captain's info in Supabase
+      if (role === 'captain' && assignedTeamId && matchedTeam) {
+        const { dbService } = require('./db');
+        await dbService.updateTeam(assignedTeamId, matchedTeam.name, matchedTeam.logoUrl, data.user.id, name);
+      }
+
+      currentUser = {
+        uid: data.user.id,
+        email: data.user.email || '',
         name,
         role,
         teamId: assignedTeamId,
       };
-
-      // Create profile in firestore
-      await setDoc(doc(db, 'users', cred.user.uid), {
-        name,
-        email,
-        role,
-        teamId: assignedTeamId,
-        createdAt: new Date(),
-      });
-
-      // Update the team document with the captain's info
-      if (role === 'captain' && assignedTeamId && matchedTeam) {
-        const { dbService } = require('./db');
-        await dbService.updateTeam(assignedTeamId, matchedTeam.name, matchedTeam.logoUrl, cred.user.uid, name);
-      }
-
-      currentUser = profile;
-      notifyListeners();
-      return currentUser;
-    } else {
-      // Save user to Mock DB in AsyncStorage
-      const usersStr = await AsyncStorage.getItem(LOCAL_USERS_DB_KEY);
-      const users: UserProfile[] = usersStr ? JSON.parse(usersStr) : DEFAULT_MOCK_USERS;
-
-      if (users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
-        throw new Error('Email is already registered in local database.');
-      }
-
-      const newUser: UserProfile = {
-        uid: `user-mock-${Date.now()}`,
-        email,
-        name,
-        role,
-        teamId: assignedTeamId,
-      };
-
-      users.push(newUser);
-      await AsyncStorage.setItem(LOCAL_USERS_DB_KEY, JSON.stringify(users));
-
-      // Update the team document with the captain's info in mock DB
-      if (role === 'captain' && assignedTeamId && matchedTeam) {
-        const { dbService } = require('./db');
-        await dbService.updateTeam(assignedTeamId, matchedTeam.name, matchedTeam.logoUrl, newUser.uid, name);
-      }
-      
-      currentUser = newUser;
-      await AsyncStorage.setItem(LOCAL_USER_KEY, JSON.stringify(currentUser));
       notifyListeners();
       return currentUser;
     }
+    throw new Error('Signup failed.');
   },
 
   logout: async () => {
-    if (isFirebaseConfigured && auth) {
-      await firebaseSignOut(auth);
-    }
+    await supabase.auth.signOut();
     currentUser = null;
     await AsyncStorage.removeItem(LOCAL_USER_KEY);
     notifyListeners();
@@ -308,43 +218,42 @@ export const authService = {
   },
 
   createAdminUser: async (email: string, password: string, name: string): Promise<void> => {
-    if (isFirebaseConfigured && db && auth) {
-      const { initializeApp } = require('firebase/app');
-      const { getAuth, createUserWithEmailAndPassword } = require('firebase/auth');
-      const { firebaseConfig } = require('../config/firebase');
-      
-      // Initialize a secondary app so we don't log out the current admin
-      const secondaryApp = initializeApp(firebaseConfig, 'SecondaryAuthApp');
-      const secondaryAuth = getAuth(secondaryApp);
-      
-      try {
-        const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
-        await setDoc(doc(db, 'users', cred.user.uid), {
-          name,
+    const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
+    const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+    
+    const { createClient } = require('@supabase/supabase-js');
+    
+    // Initialize a secondary Supabase client that does not persist the session
+    // to prevent logging out the current admin user on signup.
+    const secondaryClient = createClient(supabaseUrl, supabaseKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false
+      }
+    });
+
+    const { data, error } = await secondaryClient.auth.signUp({ 
+      email, 
+      password,
+      options: {
+        data: { name }
+      }
+    });
+    if (error) throw error;
+
+    if (data.user) {
+      // Create user profile in profiles table
+      const { error: profileErr } = await supabase.from('profiles').insert([
+        {
+          id: data.user.id,
           email,
+          name,
           role: 'admin',
-          teamId: null,
-          createdAt: new Date(),
-        });
-      } finally {
-        await secondaryAuth.app.delete();
-      }
-    } else {
-      // Mock Mode: Write to AsyncStorage
-      const usersStr = await AsyncStorage.getItem(LOCAL_USERS_DB_KEY);
-      const users: UserProfile[] = usersStr ? JSON.parse(usersStr) : DEFAULT_MOCK_USERS;
-      if (users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
-        throw new Error('Email is already registered.');
-      }
-      const newUser: UserProfile = {
-        uid: `admin-mock-${Date.now()}`,
-        email,
-        name,
-        role: 'admin',
-        teamId: null,
-      };
-      users.push(newUser);
-      await AsyncStorage.setItem(LOCAL_USERS_DB_KEY, JSON.stringify(users));
+          team_id: null,
+        }
+      ]);
+      if (profileErr) throw profileErr;
     }
   }
 };
