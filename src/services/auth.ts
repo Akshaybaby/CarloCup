@@ -14,11 +14,7 @@ export interface UserProfile {
 
 const LOCAL_USER_KEY = '@carlo_cup_local_user';
 
-// Roles registration access codes
-export const CODES = {
-  ADMIN: 'CARLO_ADMIN_2026',
-  CAPTAIN: 'CARLO_CAPTAIN_2026',
-};
+
 
 let authStateListeners: ((user: UserProfile | null) => void)[] = [];
 let currentUser: UserProfile | null = null;
@@ -138,8 +134,8 @@ export const authService = {
     let matchedTeam: any = null;
 
     // Validate role codes
-    if (role === 'admin' && roleCode !== CODES.ADMIN) {
-      throw new Error('Invalid Admin Access Code.');
+    if (role === 'admin') {
+      throw new Error('Admin registration is not allowed publicly. Please contact another administrator.');
     }
 
     if (role === 'captain') {

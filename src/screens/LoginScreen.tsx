@@ -15,9 +15,8 @@ import { Mail, Lock, User, KeyRound, Eye, EyeOff } from 'lucide-react-native';
 import { COLORS, SPACING } from '../config/theme';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
-import { authService, UserRole, CODES } from '../services/auth';
+import { authService, UserRole } from '../services/auth';
 import { dbService, Team } from '../services/db';
-import { isFirebaseConfigured } from '../config/firebase';
 
 export const LoginScreen: React.FC = () => {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -140,7 +139,7 @@ export const LoginScreen: React.FC = () => {
             <View style={styles.signUpOptions}>
               <Text style={styles.label}>Register As</Text>
               <View style={styles.roleTabs}>
-                {(['viewer', 'captain', 'admin'] as UserRole[]).map((r) => (
+                {(['viewer', 'captain'] as UserRole[]).map((r) => (
                   <TouchableOpacity
                     key={r}
                     style={[
@@ -158,17 +157,6 @@ export const LoginScreen: React.FC = () => {
                   </TouchableOpacity>
                 ))}
               </View>
-
-              {role === 'admin' && (
-                <Input
-                  label="Admin Access Code"
-                  placeholder="Enter code provided by organizers"
-                  value={roleCode}
-                  onChangeText={setRoleCode}
-                  autoCapitalize="characters"
-                  icon={<KeyRound color={COLORS.textMuted} size={20} />}
-                />
-              )}
 
               {role === 'captain' && (
                 <Input
@@ -212,18 +200,7 @@ export const LoginScreen: React.FC = () => {
           />
         </View>
 
-        {/* Hints panel when running in Mock Mode */}
-        {!isFirebaseConfigured && (
-          <View style={styles.mockInfoCard}>
-            <Text style={styles.mockInfoTitle}>💡 Development Demo Hints</Text>
-            <Text style={styles.mockInfoText}>• Log in as Admin: <Text style={styles.boldText}>admin@carlo.com</Text> (Use any password)</Text>
-            <Text style={styles.mockInfoText}>• Log in as Captain: <Text style={styles.boldText}>captain1@carlo.com</Text> (Use any password)</Text>
-            <Text style={styles.mockInfoText}>• Admin Access Code: <Text style={styles.boldText}>{CODES.ADMIN}</Text></Text>
-            {teams.length > 0 && (
-              <Text style={styles.mockInfoText}>• Team Captain Codes: <Text style={styles.boldText}>{teams.map(t => `${t.name}: ${t.captainCode}`).join(', ')}</Text></Text>
-            )}
-          </View>
-        )}
+
       </ScrollView>
     </KeyboardAvoidingView>
   );

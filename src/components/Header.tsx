@@ -12,7 +12,7 @@ import { useNavigation } from '@react-navigation/native';
 import { ArrowLeft, LogOut } from 'lucide-react-native';
 import { COLORS, SPACING } from '../config/theme';
 import { authService } from '../services/auth';
-import { isFirebaseConfigured } from '../config/firebase';
+
 
 interface HeaderProps {
   title: string;
@@ -55,14 +55,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <View style={styles.outerContainer}>
-      {/* Mock Mode Banner */}
-      {!isFirebaseConfigured && (
-        <View style={styles.mockBanner}>
-          <Text style={styles.mockText}>
-            ⚡ Running in Local Demo Mode (Firebase Config Placeholder)
-          </Text>
-        </View>
-      )}
+      {/* Header bar safe area container */}
       
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.container}>
@@ -126,17 +119,7 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
-  mockBanner: {
-    backgroundColor: '#D97706', // Amber warning color
-    paddingVertical: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mockText: {
-    color: '#000000',
-    fontSize: 11,
-    fontWeight: 'bold',
-  },
+
   safeArea: {
     backgroundColor: COLORS.background,
   },
